@@ -15,20 +15,23 @@ delimiter=";"
 
 # Temporary file holding speedtest-cli output
 log=/tmp/speedtest-csv.log
+SKIP_SPEEDTEST=false
 
 # Prepare
 start=`date +"%Y-%m-%d %H:%M:%S"`
 mkdir -p `dirname $log`
 
-if test -f "$log"; then
+if $SKIP_SPEEDTEST && test -f "$log"; then
   # Reuse existing results (debugging)
   1>&2 echo "** Reusing existing results: $log"
 
 else
   # Run Speedtest
+  echo "Running speed test..."
   docker run --rm --net=host tianon/speedtest --secure --csv --csv-delimiter ";" --share > $log
-
 fi
+
+echo "Finished with results: `cat $log`"
 
 # Parse
 IFS="$delimiter" read -ra results <<< `cat $log`
@@ -46,22 +49,21 @@ download=`bc <<< "scale=2; $download / 1000 / 1000" `
 upload=`bc <<< "scale=2; $upload / 1000 / 1000" `
 
 # Send to IFTTT
+echo "Sending to IFTTT..."
 secret_key="<secret-key>"
 curl https://maker.ifttt.com/trigger/speedtest/with/key/${secret_key} \
   -X POST \
   -H "Content-Type: application/json" \
   -d @<(cat <<EOF
 {
-  "value1":"${server_ping} Mbps",
-  "value2":"${download} Mbps",
+  "value1":"${server_ping}",
+  "value2":"${download}",
   "value3":"${upload}"
 }
 EOF
 )
 
-if [[ $? -ne 0 ]]; then
-  echo "Problem sending to IFTTT !" >> "$log"
-else
-  echo
-  rm -v "$log"
-fi
+echo
+rm -v "$log"
+
+exit 0
